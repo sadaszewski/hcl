@@ -10,6 +10,7 @@
 #include <hcl_jpeg.h>
 
 #include <string.h>
+#include <stdexcept>
 
 HCL_NS_BEGIN
 
@@ -26,7 +27,15 @@ template<> const std::string NdArrayS64::name = "s64";
 template<> const std::string NdArrayF32::name = "f32";
 template<> const std::string NdArrayF64::name = "f64";
 
-Data Container::compress(const NdArrayBase *ary, const Algorithm *algo, const Options *opts) const {
+Data Container::compress(const NdArrayBase *ary, const std::string &method, const Options *opts) const {
+    boost::shared_ptr<Algorithm> algo;
+
+    if (method == "JpegSequence") {
+            algo = boost::shared_ptr<Algorithm>(new JpegSequence());
+    } else {
+        throw std::runtime_error("Unknown compression method.");
+    }
+
     Data compr = algo->compress(ary, opts);
 
     std::string mime = algo->mimeType();
@@ -82,10 +91,34 @@ Container::ARRAY_TYPE Container::decompress(const char *ptr) {
     else if (name == "s64") ary = Container::ARRAY_TYPE(new NdArrayS64(dims));
     else if (name == "f32") ary = Container::ARRAY_TYPE(new NdArrayF32(dims));
     else if (name == "f64") ary = Container::ARRAY_TYPE(new NdArrayF64(dims));
+    else throw std::runtime_error("Unknown data type.");
 
-    if (mime == "application/vnd.hcl.JpegSequence") JpegSequence().decompress(ptr, ary.get());
+    if (mime == "application/vnd.hcl.JpegSequence") JpegSequence().decompress(ptr, len, ary.get());
+    else throw std::runtime_error("Unknown compression method.");
 
     return ary;
+}
+
+void Data::append(const char *data, unsigned long size) {
+    if (!buffer.get()) {
+        allocd = size * 2;
+        buffer = Data::BUFFER_TYPE(new char[allocd]);
+    } else if (length + size >= allocd) {
+        Data::BUFFER_TYPE old = buffer;
+        allocd = allocd * 2 + size;
+        buffer = Data::BUFFER_TYPE(new char[allocd]);
+        memcpy(buffer.get(), old.get(), length);
+    }
+    memcpy(buffer.get() + length, data, size);
+    length += size;
+}
+
+void Options::set(const KEY_TYPE &name, const VALUE_TYPE &val) {
+    values[name] = val;
+}
+
+const Options::VALUE_TYPE& Options::get(const KEY_TYPE &name) const {
+    return values.find(name)->second;
 }
 
 HCL_NS_END
