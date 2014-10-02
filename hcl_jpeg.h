@@ -23,7 +23,7 @@ public:
 class JpegSequence: public Algorithm {
 public:
     Data compress(const NdArrayBase *ary, const Options *opts = 0) const;
-    void decompress(const char *, unsigned long, NdArrayBase *ary) const;
+    ARRAY_TYPE decompress(const char *, unsigned long, const NdArrayBase::DIMS_TYPE &dims) const;
     std::string mimeType() const;
 };
 

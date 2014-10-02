@@ -53,7 +53,7 @@ public:
         return dims;
     }
 
-    const void* getRaw() = 0;
+    virtual const void* getRaw() const = 0;
 
     virtual const std::string& getName() const = 0;
 
@@ -84,12 +84,14 @@ public:
         size = 1;
         for (DIMS_TYPE::const_iterator it = dims.begin(); it != dims.end(); it++) size *= *it;
         data = DATA_TYPE(new T[size]);
+        this->dims = dims;
     }
 
     NdArray (T *data, const DIMS_TYPE &dims) {
         size = 1;
         for (DIMS_TYPE::const_iterator it = dims.begin(); it != dims.end(); it++) size *= *it;
         this->data = DATA_TYPE(data);
+        this->dims = dims;
     }
 
     NdArray (const T *data, const DIMS_TYPE &dims) {
@@ -97,6 +99,7 @@ public:
         for (DIMS_TYPE::const_iterator it = dims.begin(); it != dims.end(); it++) size *= *it;
         this->data = DATA_TYPE(new T[size]);
         for (SIZE_TYPE i = 0; i < size; i++) this->data.get()[i] = data[i];
+        this->dims = dims;
     }
 
     template<class U> const NdArray<U> to() const {
@@ -163,12 +166,12 @@ public:
     typedef boost::shared_ptr<char> BUFFER_TYPE;
 
     BUFFER_TYPE buffer;
-    int length;
+    unsigned long length;
     unsigned long allocd;
 
     Data(): length(0), allocd(0) { }
 
-    void append(const char *data, unsigned long size);
+    void append(const void *data, unsigned long size);
 };
 
 class Options {
@@ -190,7 +193,7 @@ public:
 
     virtual ~Algorithm() {}
     virtual Data compress(const NdArrayBase*, const Options *opts = 0) const = 0;
-    virtual void decompress(const char*, unsigned long, NdArrayBase*) const = 0;
+    virtual ARRAY_TYPE decompress(const char*, unsigned long, const NdArrayBase::DIMS_TYPE &dims) const = 0;
     virtual std::string mimeType() const = 0;
 };
 

@@ -1,5 +1,5 @@
 #if 0
-gcc -g pyhcl.cpp -fPIC -shared -o pyhcl.so
+g++ -g pyhcl.cpp -fPIC -shared -o pyhcl.so -I. -L. -lhcl
 exit
 #endif
 
@@ -14,8 +14,36 @@ exit
 #include <python2.7/Python.h>
 #include <python2.7/numpy/arrayobject.h>
 #include <hcl.h>
+#include <stdexcept>
 
 static PyObject *error;
+
+template<class T> struct PySharedPtr {
+    PyObject_HEAD;
+    boost::shared_ptr<T> *ptr;
+};
+
+template<class T> static void PySharedPtr_dealloc(PyObject *self) {
+    delete ((PySharedPtr<T>*) self)->ptr;
+}
+
+#define SHARED_PTR_TYPE(a) PyTypeObject PySharedPtrType_##a = { \
+    PyObject_HEAD_INIT(NULL) \
+    0, \
+    "PySharedPtr_"#a, \
+    sizeof(PySharedPtr<a>), \
+    0, \
+    PySharedPtr_dealloc<a>, \
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
+    Py_TPFLAGS_DEFAULT, \
+    "Shared pointer object for "#a \
+};
+
+typedef hcl::NdArrayBase NdArrayBase;
+typedef hcl::Data Data;
+
+SHARED_PTR_TYPE(NdArrayBase)
+SHARED_PTR_TYPE(char)
 
 //
 // Usage:
@@ -53,11 +81,11 @@ static PyObject* hcl_compress(PyObject *self, PyObject *args) {
             return 0;
         }
         if (PyString_Check(value)) {
-            opts->set(PyString_AsString(key), PyString_AsString(value));
+            opts.set(PyString_AsString(key), std::string(PyString_AsString(value)));
         } else if (PyInt_Check(value)) {
-            opts->set(PyString_AsString(key), PyInt_AsInt(value));
+            opts.set(PyString_AsString(key), (int) PyInt_AsLong(value));
         } else if (PyFloat_Check(value)) {
-            opts->set(PyString_AsString(key), PyFloat_AsDouble(value));
+            opts.set(PyString_AsString(key), PyFloat_AsDouble(value));
         } else {
             PyErr_Format(error, "opts values must be strings or int/float numbers");
             return 0;
@@ -65,14 +93,17 @@ static PyObject* hcl_compress(PyObject *self, PyObject *args) {
     }
 
     hcl::NdArrayBase::DIMS_TYPE dims;
-    unsigned int ndims = PyArray_NDIMS(ary);
+    unsigned int ndims = PyArray_NDIM(ary);
     for (unsigned int i = 0; i < ndims; i++) {
         dims.push_back(PyArray_DIM(ary, i));
     }
+    printf("ndims: %u, dims.size(): %u\n", ndims, dims.size());
 
-    boost::shared_ptr<hcl::NdArrayBase> ary;
+    int npy_dtype = PyArray_TYPE(ary);
 
-#define CASE(a, b) case a: ary.reset(new NdArray<b>((const b*) PyArray_DATA(ary), dims));
+    boost::shared_ptr<hcl::NdArrayBase> ndary;
+
+#define CASE(a, b) case a: ndary.reset(new hcl::NdArray<b>((const b*) PyArray_DATA(ary), dims)); break;
 
     switch(npy_dtype) {
     CASE(NPY_DOUBLE, double)
@@ -90,16 +121,27 @@ static PyObject* hcl_compress(PyObject *self, PyObject *args) {
         return 0;
     }
 
+    printf("ndary->getDims().size(): %u\n", ndary->getDims().size());
+
+#undef CASE
+
     hcl::Container c;
     hcl::Data data;
     try {
-        data = c.compress(ary, method, opts);
+        data = c.compress(ndary.get(), method, &opts);
     } catch (std::runtime_error &e) {
-        PyErr_Format(error, e.what());
+        PyErr_Format(error, "%s", e.what());
         return 0;
     }
 
-    PyObject *ret = PyString_FromStringAndSize(data.buffer.get(), data.length);
+    printf("data.length: %u\n", data.length);
+
+    PyObject *ret = PyArray_SimpleNewFromData(1, (long*) &data.length, NPY_UINT8, data.buffer.get());
+    PyObject *base = (PyObject*) PyObject_New(PySharedPtr<char>, &PySharedPtrType_char);
+    ((PySharedPtr<char>*) base)->ptr = new boost::shared_ptr<char>(data.buffer);
+    PyArray_BASE(ret) = base;
+
+    // PyObject *ret = PyString_FromStringAndSize(data.buffer.get(), data.length);
 
     return ret;
 }
@@ -110,21 +152,35 @@ static PyObject* hcl_compress(PyObject *self, PyObject *args) {
 // ary = hcl_decompress(data)
 //
 static PyObject* hcl_decompress(PyObject *self, PyObject *args) {
-    const char *data;
-    Py_ssize_t length;
+    PyObject *data_ary;
 
-    if (!PyArg_ParseTuple(args, "s#", &data, &length)) {
+    if (!PyArg_ParseTuple(args, "O", &data_ary)) {
         PyErr_Format(error, "Couldn't parse arguments");
         return 0;
     }
 
+    if (!PyArray_Check(data_ary) || PyArray_NDIM(data_ary) != 1 || PyArray_TYPE(data_ary) != NPY_UINT8) {
+        PyErr_Format(error, "ary must be a 1-dimensional unsigned char NumPy array");
+        return 0;
+    }
+
+    const char *data = (const char*) PyArray_DATA(data_ary);
+    Py_ssize_t length = PyArray_DIM(data_ary, 0);
+
+    printf("data: 0x%08X, length: %u\n", data, length);
+
     boost::shared_ptr<hcl::NdArrayBase> ary;
     hcl::Container c;
 
-    ary = c.decompress(data);
+    try {
+        ary = c.decompress(data);
+    } catch (std::runtime_error &e) {
+        PyErr_Format(error, "%s", e.what());
+        return 0;
+    }
     int dtype;
 
-#define CASE(a, b) if (dynamic_cast<NdArray<b> *>(ary.get())) dtype = a; else
+#define CASE(a, b) if (dynamic_cast<hcl::NdArray<b> *>(ary.get())) dtype = a; else
 
     CASE(NPY_DOUBLE, double)
     CASE(NPY_FLOAT, float)
@@ -141,17 +197,29 @@ static PyObject* hcl_decompress(PyObject *self, PyObject *args) {
         return 0;
     }
 
-    PyObject *ret = PyArray_SimpleNewFromData(ary->getDims().size(), &ary->getDims()[0], dtype, ary->getRaw());
+    printf("dtype: %d\n", dtype);
+    printf("ary->getDims().size(): %u\n", ary->getDims().size());
+    printf("ary->getDims()[0]: %u\n", ary->getDims()[0]);
+    printf("ary->getDims()[1]: %u\n", ary->getDims()[1]);
+    printf("ary->getDims()[2]: %u\n", ary->getDims()[2]);
+    printf("ary->getName(): %s\n", ary->getName().c_str());
+    printf("ary->getRaw(): 0x%08X\n", ary->getRaw());
 
-    hcl::Data data;
-    try {
-        data = c.compress(ary, method, opts);
-    } catch (std::runtime_error &e) {
-        PyErr_Format(error, e.what());
-        return 0;
+    std::vector<npy_intp> npy_dims(ary->getDims().size());
+    for (int i = 0; i < ary->getDims().size(); i++) npy_dims[i] = ary->getDims()[i];
+
+    PyObject *ret = PyArray_SimpleNewFromData(ary->getDims().size(), &npy_dims[0], dtype, (void*) ary->getRaw());
+
+    if (PyArray_Check(ret)) {
+        printf("array ok, %u, %u\n", sizeof(long), sizeof(int));
+        printf("array dim: %u, %u, %u\n", PyArray_DIM(ret, 0), PyArray_DIM(ret, 1), PyArray_DIM(ret, 2));
     }
 
-    PyObject *ret = PyString_FromStringAndSize(data.buffer.get(), data.length);
+    printf("ret: 0x%08X\n", ret);
+
+    PyObject *base = (PyObject*) PyObject_New(PySharedPtr<NdArrayBase>, &PySharedPtrType_NdArrayBase);
+    ((PySharedPtr<NdArrayBase>*) base)->ptr = new boost::shared_ptr<NdArrayBase>(ary);
+    PyArray_BASE(ret) = base;
 
     return ret;
 }
@@ -168,6 +236,11 @@ PyMODINIT_FUNC initpyhcl() {
     if (!m) {
         return;
     }
+
+    PySharedPtrType_NdArrayBase.tp_new = PyType_GenericNew;
+    PySharedPtrType_char.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&PySharedPtrType_char) < 0 || PyType_Ready(&PySharedPtrType_NdArrayBase))
+        return;
 
     error = PyErr_NewException("pyhcl.error", 0, 0);
     Py_INCREF(error);
