@@ -1,5 +1,6 @@
 #if 0
 g++ -g pyhcl.cpp -fPIC -shared -o pyhcl.so -I. -L. -lhcl
+echo Done
 exit
 #endif
 
@@ -44,6 +45,18 @@ typedef hcl::Data Data;
 
 SHARED_PTR_TYPE(NdArrayBase)
 SHARED_PTR_TYPE(char)
+
+class DecRefDeleter {
+    PyObject *obj;
+public:
+    DecRefDeleter(PyObject *obj) {
+        this->obj = obj;
+        Py_INCREF(obj);
+    }
+    void operator()(void *) {
+        Py_DECREF(obj);
+    }
+};
 
 //
 // Usage:
@@ -103,7 +116,7 @@ static PyObject* hcl_compress(PyObject *self, PyObject *args) {
 
     boost::shared_ptr<hcl::NdArrayBase> ndary;
 
-#define CASE(a, b) case a: ndary.reset(new hcl::NdArray<b>((const b*) PyArray_DATA(ary), dims)); break;
+#define CASE(a, b) case a: ndary.reset(new hcl::NdArray<b>(boost::shared_ptr<b>((b*) PyArray_DATA(ary), DecRefDeleter(ary)), dims)); break;
 
     switch(npy_dtype) {
     CASE(NPY_DOUBLE, double)

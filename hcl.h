@@ -87,6 +87,13 @@ public:
         this->dims = dims;
     }
 
+    NdArray(const boost::shared_ptr<T> &data, const DIMS_TYPE &dims) {
+        size = 1;
+        for (DIMS_TYPE::const_iterator it = dims.begin(); it != dims.end(); it++) size *= *it;
+        this->data = data;
+        this->dims = dims;
+    }
+
     NdArray (T *data, const DIMS_TYPE &dims) {
         size = 1;
         for (DIMS_TYPE::const_iterator it = dims.begin(); it != dims.end(); it++) size *= *it;

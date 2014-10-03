@@ -61,11 +61,13 @@ Data JpegSequence::compress(const NdArrayBase *ary, const Options *opts) const {
         }
         jpeg_finish_compress(&cinfo);
         printf("outsize: %u\n", outsize);
-        data.append((const char*) out, outsize);
+
         //free(out);
         //out = 0;
         //jpeg_mem_dest(&cinfo, &out, &outsize);
     }
+
+    data.append((const char*) out, outsize);
 
     free(out);
 
