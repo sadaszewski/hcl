@@ -150,9 +150,13 @@ public:
         return data.get();
     }
 
+#ifndef HCL_BUILD
     const std::string& getName() const {
         return name;
     }
+#else
+    const std::string& getName() const;
+#endif
 };
 
 template class NdArray<unsigned char>;

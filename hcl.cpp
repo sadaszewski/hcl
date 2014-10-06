@@ -6,6 +6,7 @@
 // http://algoholic.eu
 //
 
+#define HCL_BUILD
 #include <hcl.h>
 #include <hcl_jpeg.h>
 
@@ -27,6 +28,10 @@ template<> const std::string NdArrayS64::name = "s64";
 
 template<> const std::string NdArrayF32::name = "f32";
 template<> const std::string NdArrayF64::name = "f64";
+
+template<class T> const std::string& NdArray<T>::getName() const {
+    return name;
+}
 
 Data Container::compress(const NdArrayBase *ary, const std::string &method, const Options *opts) const {
     boost::shared_ptr<Algorithm> algo;

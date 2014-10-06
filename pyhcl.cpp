@@ -1,5 +1,5 @@
 #if 0
-g++ -g pyhcl.cpp -fPIC -shared -o pyhcl.so -I. -L. -lhcl
+g++ -g  -fPIC -shared -o pyhcl.so -I. -L. -lhcl -I/usr/include/python2.7 -I/opt/local/include -I/opt/local/Library/Frameworks/Python.framework/Versions/2.7/include/python2.7 -I/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/numpy/core/include/  pyhcl.cpp -L/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib -lpython2.7
 echo Done
 exit
 #endif
@@ -12,8 +12,8 @@ exit
 // http://algoholic.eu
 //
 
-#include <python2.7/Python.h>
-#include <python2.7/numpy/arrayobject.h>
+#include <Python.h>
+#include <numpy/arrayobject.h>
 #include <hcl.h>
 #include <stdexcept>
 
@@ -244,11 +244,15 @@ static PyMethodDef pyhcl_methods[] = {
 };
 
 PyMODINIT_FUNC initpyhcl() {
+
+
     PyObject *m;
     m = Py_InitModule("pyhcl", pyhcl_methods);
     if (!m) {
         return;
     }
+
+    printf("initpyhcl()\n");
 
     PySharedPtrType_NdArrayBase.tp_new = PyType_GenericNew;
     PySharedPtrType_char.tp_new = PyType_GenericNew;
