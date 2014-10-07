@@ -84,6 +84,7 @@ public:
         size = 1;
         for (DIMS_TYPE::const_iterator it = dims.begin(); it != dims.end(); it++) size *= *it;
         data = DATA_TYPE(new T[size]);
+        if (data.get() == 0) throw std::runtime_error("NdArray out of memory");
         this->dims = dims;
     }
 
@@ -105,6 +106,7 @@ public:
         size = 1;
         for (DIMS_TYPE::const_iterator it = dims.begin(); it != dims.end(); it++) size *= *it;
         this->data = DATA_TYPE(new T[size]);
+        if (this->data.get() == 0) throw std::runtime_error("NdArray out of memory");
         for (SIZE_TYPE i = 0; i < size; i++) this->data.get()[i] = data[i];
         this->dims = dims;
     }

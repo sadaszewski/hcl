@@ -9,6 +9,7 @@
 #define HCL_BUILD
 #include <hcl.h>
 #include <hcl_jpeg.h>
+#include <hcl_ffmpeg.h>
 
 #include <string.h>
 #include <stdexcept>
@@ -33,14 +34,15 @@ template<class T> const std::string& NdArray<T>::getName() const {
     return name;
 }
 
-Data Container::compress(const NdArrayBase *ary, const std::string &method, const Options *opts) const {
-    boost::shared_ptr<Algorithm> algo;
+static Ffmpeg ffmpeg;
+static JpegSequence jpegSeq;
 
-    if (method == "JpegSequence") {
-        algo = boost::shared_ptr<Algorithm>(new JpegSequence());
-    } else {
-        throw std::runtime_error("Unknown compression method.");
-    }
+Data Container::compress(const NdArrayBase *ary, const std::string &method, const Options *opts) const {
+    Algorithm *algo;
+
+    if (method == "JpegSequence") algo = &jpegSeq;
+    else if (method == "Ffmpeg") algo = &ffmpeg;
+    else throw std::runtime_error("Unknown compression method.");
 
     Data compr = algo->compress(ary, opts);
 
@@ -107,10 +109,12 @@ void Data::append(const void *data, unsigned long size) {
         // printf("Allocating fresh buffer...\n");
         allocd = size * 2;
         buffer = Data::BUFFER_TYPE(new char[allocd]);
+        if (buffer.get() == 0) throw std::runtime_error("Data::append() Out of memory");
     } else if (length + size >= allocd) {
         Data::BUFFER_TYPE old = buffer;
         allocd = allocd * 2 + size;
         buffer = Data::BUFFER_TYPE(new char[allocd]);
+        if (buffer.get() == 0) throw std::runtime_error("Data::append() Out of memory");
         memcpy(buffer.get(), old.get(), length);
     }
     memcpy(buffer.get() + length, data, size);

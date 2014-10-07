@@ -1,3 +1,11 @@
+//
+// Hyperdimensional Compression Library (HCL)
+//
+// Author: Stanislaw Adaszewski, 2014
+// email: s.adaszewski@gmail.com
+// http://algoholic.eu
+//
+
 #ifndef _HCL_FFMPEG_H_
 #define _HCL_FFMPEG_H_
 

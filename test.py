@@ -13,6 +13,7 @@ def main():
 	with open('test.out', 'wb') as f:
 		f.write(data.tostring())
 	ret = hcl_decompress(data)
+	data = hcl_compress(ary, 'Ffmpeg', {'codec': 'libx264'});
 	# print ret
 
 
